@@ -1,5 +1,10 @@
 # agentic-quant-lab
 
+[![CI](https://github.com/rockcli/agentic-quant-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/rockcli/agentic-quant-lab/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/rockcli/agentic-quant-lab?display_name=tag&color=10B981)](https://github.com/rockcli/agentic-quant-lab/releases/tag/v0.1.0)
+[![Python >=3.11](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 **Knowledge-grounded agentic quantitative strategy research & anti-overfitting validation framework.**
