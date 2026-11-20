@@ -97,6 +97,28 @@ uv run --with pytest --with numpy --with polars pytest
 
 ---
 
+## 非目标
+
+- **非实盘交易、券商下单或行情源工具** — 外部行情与执行完全解耦（向 `run_pbo_batch` 传入 `fetch_func=None` 会显式抛出 `ValueError`）。
+- **不自动沙盒执行 LLM 生成的策略代码** — `ResearchOrchestrator.run()` 刻意不 `exec()` 生成的策略文件（默认运行占位策略 `SmaCrossStrategy`，需人工审查代码后再接入验证链路）。
+- **不做高频逐笔订单簿或融资融券模拟** — `BacktestEngine` 面向单资产 K 线（固定费率 + 加法滑点），不模拟盘口深度、部分成交或借券/资金费率。
+- **非持久化向量数据库** — `InMemoryVectorStore` 仅在进程内存中维护 NumPy 向量，每次启动会重建 TF-IDF 索引。
+- **不构成任何投资建议** — 统计门禁只能降低历史样本过拟合概率，无法保证未来实盘收益。
+
+## 已知坑点
+
+- **默认 `close` 撮合与严格 T+1 隔离** — 为兼容既有接口，`BacktestEngine` 及 WFA/网格/自动迭代链路默认仍使用 `execution_timing="close"`；严格次日开盘成交、剔除隔夜跳空泄漏的实现位于 `validation/signal_engine.py`（`run_strategy()`）。
+- **CSCV 采样与无方向 DSR** — `cscv_pbo()` 采用蒙特卡洛分块抽样而非全量 `C(S, S/2)` 枚举；其中 `_compute_deflated_sharpe()` 使用了 `abs(mean_logit)`，导致稳定过拟合的策略（`logit > 0`）也会拿到高 `dsr`，必须与 `pbo` 联合判读。
+- **辅助函数边界与短窗口吞没** — `apply_weekly_filter()` 默认将每周最后一个交易日收盘价广播至当周周一至周五（实盘化需额外滞后 1 周）；`MarketRegime.classify()` 使用全样本波动率中位数仅适合事后 WFA 归因（实时因果特征请改用 `classify_regime_percentile()`）；短周期日内窗口若小于默认 `purge_days=5` 会被直接跳过。
+
+## 安全与信任边界
+
+- **核心包零动态代码执行** — `src/agentic_quant/` 内无任何 `subprocess`、`eval`、`exec` 或 `pickle` 调用；生成的 `.py` 策略仅做 `ast.parse` 语法与结构校验，导入执行前必须人工审计。
+- **受控出网与明文缓存** — 仅 `LLMClient.chat()` 会通过标准库 `urllib.request.urlopen` 请求 `<PROVIDER>_BASE_URL/chat/completions`（携带 Bearer Token）；`base_url` 未做协议/域名白名单限制，必须视为受信任配置。提示词与模型响应会明文缓存在 `data/cache/llm_cache/`（TTL 24 小时，16 位十六进制 SHA-256 摘要命名）。
+- **本地可信输入假设** — `docs/knowledge_base/*.md` 内容会原样拼入 RAG 提示词（无提示词注入清洗），`StrategyGenerationPipeline.save()` 亦直接基于截取的 `description` 生成文件名，两者均假设为可信本地输入。
+
+---
+
 ## 方法论说明
 
 - 本仓库提供的是**策略研究与统计防过拟合验证工具**，不包含任何未经验证的实盘收益率承诺。

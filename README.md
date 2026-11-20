@@ -215,6 +215,28 @@ All tests are offline and self-contained using synthetic market series and mocke
 
 ---
 
+## Non-Goals
+
+- **Not a live trading, brokerage, or market-data platform** — Market data feeds and order routing are decoupled (`fetch_func=None` raises `ValueError`).
+- **Not an autonomous sandboxed strategy runner** — `ResearchOrchestrator.run()` intentionally does **not** `exec()` LLM-generated strategies (it runs a placeholder `SmaCrossStrategy` until a human reviews and integrates generated `.py` files).
+- **Not an intraday tick/order-book or margin simulator** — `BacktestEngine` simulates single-asset bars with flat commission rates and additive slippage, without borrow/funding fees or partial fills.
+- **Not a persistent vector database** — `InMemoryVectorStore` holds NumPy arrays in RAM and rebuilds its TF-IDF index per process.
+- **Not financial advice** — Statistical validation gates reduce overfitting risk on historical bars but do not guarantee future performance.
+
+## Known Pitfalls
+
+- **Default `close` timing vs strict T+1 execution** — `BacktestEngine` defaults to `execution_timing="close"` for legacy compatibility across WFA/grid/iteration loops; strict next-open T+1 execution (which excludes overnight entry gaps) is enforced in `validation/signal_engine.py` (`run_strategy()`).
+- **CSCV sampling & direction-agnostic DSR** — `cscv_pbo()` uses Monte Carlo block sampling rather than exhaustive `C(S, S/2)` combinations, and `_compute_deflated_sharpe()` uses `abs(mean_logit)` so a consistently overfitting strategy (`logit > 0`) also scores high `dsr`; always evaluate `dsr` together with `pbo`.
+- **Helper look-ahead & short-window boundaries** — `apply_weekly_filter()` broadcasts each week's final close across Mon–Fri unless explicitly lagged by 1 week; `MarketRegime.classify()` computes full-sample median volatility for post-hoc WFA attribution (use `classify_regime_percentile()` for causal features); default `purge_days=5` drops short intraday windows whose test span is shorter than the purge gap.
+
+## Security & Trust Boundaries
+
+- **Zero dynamic execution in core package** — `src/agentic_quant/` contains zero `subprocess`, `eval`, `exec`, or `pickle` calls; generated strategies are only AST-parsed for structure (`ast.parse`) and must be audited manually before import/execution.
+- **Scoped network & disk cache** — Only `LLMClient.chat()` touches the network (`urllib.request.urlopen` to `<PROVIDER>_BASE_URL/chat/completions` with a Bearer token); treat `base_url` as trusted configuration (no URL scheme/host allowlist is enforced). Plaintext LLM prompts and responses are cached for 24 hours under `data/cache/llm_cache/` keyed by a 16-hex-char SHA-256 prefix.
+- **Trusted local inputs** — Markdown files in `docs/knowledge_base/` are injected verbatim into RAG prompts without prompt-injection filtering, and `StrategyGenerationPipeline.save()` builds output filenames from lightly sanitized `description` prefixes.
+
+---
+
 ## Methodology Notes
 
 - This library provides **research and statistical validation tooling**; it makes no claims of future trading returns or live execution readiness without your own out-of-sample, transaction-cost, and slippage verification.
